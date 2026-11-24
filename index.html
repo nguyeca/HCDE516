@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tipping Point – checkout preview</title>
+<style>
+  :root { --uw: #4b2e83; }
+  body { margin: 0; background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #1f1f1f; }
+  .bar { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid #e3e3e3; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 14px; }
+  .bar strong { margin-right: 4px; }
+  .bar button { font: inherit; padding: 6px 12px; border: 1px solid #c9c9d1; background: #fff; border-radius: 6px; cursor: pointer; }
+  .bar button.on { background: var(--uw); color: #fff; border-color: var(--uw); }
+  .bar .note { color: #666; flex-basis: 100%; font-size: 13px; }
+  /* A rough copy of Qualtrics' page structure, so the scripts lay out the same way */
+  #logo-container { text-align: center; padding: 24px; }
+  #logo-container img { height: 100px; }
+  #survey-canvas { width: 1024px; max-width: calc(100% - 24px); margin: 0 auto 48px; }
+  .overflow-content { background: #fff; padding: 24px; overflow: auto; border-radius: 4px; }
+  .question-display { max-width: 720px; font-size: 18px; line-height: 1.5; }
+  .check label { display: block; margin: 10px 0; font-size: 17px; }
+  pre { background: #f4f4f5; padding: 12px; font-size: 13px; white-space: pre-wrap; }
+  .next { margin-top: 16px; padding: 10px 18px; font: inherit; background: var(--uw); color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <strong>Condition:</strong>
+  <button data-c="C1">C1 counter · low tips</button>
+  <button data-c="C2">C2 counter · high tips</button>
+  <button data-c="C3">C3 sit-down · low tips</button>
+  <button data-c="C4">C4 sit-down · high tips</button>
+  <span class="note">Preview only. It runs the exact scripts in the <code>qualtrics/</code> folder, so edits on GitHub show up here about a minute after you commit. Final wording lives in Qualtrics Survey flow; the text below is a copy for previewing.</span>
+</div>
+<header id="logo-container"><img alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 100'%3E%3Ctext x='75' y='88' text-anchor='middle' font-family='Georgia' font-weight='900' font-size='110' fill='%234b2e83'%3EW%3C/text%3E%3C/svg%3E"></header>
+<main id="survey-canvas"><div class="overflow-content" id="page"></div></main>
+
+<script>
+// Copy of the Survey flow values (Qualtrics is the source of truth for this wording).
+var CONDITIONS = {
+  C1: { service: "counter", defaults: "low" },
+  C2: { service: "counter", defaults: "high" },
+  C3: { service: "sitdown", defaults: "low" },
+  C4: { service: "sitdown", defaults: "high" }
+};
+var TEXT = {
+  counter: {
+    scenario: "Imagine you're stopping for lunch at Corner Kitchen, a counter-service restaurant in Seattle. You order at the counter, and the cashier rings you up. You'll pick up your food at the counter when it's ready. Review your order on the tablet, then tap Continue.",
+    reminder: "The cashier turns the tablet toward you so you can pay. Complete your payment as you normally would."
+  },
+  sitdown: {
+    scenario: "Imagine you're having lunch at Corner Kitchen, a sit-down restaurant in Seattle. A server seats you, takes your order, brings your food, and checks on you during your meal. When you're finished, the server brings your check on a payment tablet. Review your order, then tap Continue.",
+    reminder: "Your server hands you the tablet at your table so you can pay. Complete your payment as you normally would."
+  }
+};
+var CHECK_QUESTION = "Thanks! Before you continue, think back to the scenario. Where did you pay?";
+var CHECK_CHOICES = ["At the counter, after I ordered", "At my table, after my meal"];
+
+var params = new URLSearchParams(location.search);
+var cond = /^C[1-4]$/.test(params.get("c") || "") ? params.get("c") : "C4";
+var ED = { condition: cond, service: CONDITIONS[cond].service, defaults: CONDITIONS[cond].defaults };
+ED.scenario = TEXT[ED.service].scenario;
+ED.reminder = TEXT[ED.service].reminder;
+
+document.querySelectorAll(".bar button").forEach(function (b) {
+  if (b.dataset.c === cond) { b.classList.add("on"); }
+  b.addEventListener("click", function () { location.search = "?c=" + b.dataset.c; });
+});
+
+var unloadFns = [];
+function pipe(src) {
+  // Qualtrics swaps ${e://Field/name} for the stored value before the script runs.
+  return src.replace(/\$\{e:\/\/Field\/(\w+)\}/g, function (m, k) { return ED[k] != null ? String(ED[k]) : ""; });
+}
+function runPage(file, questionText, next) {
+  unloadFns.forEach(function (f) { f(); }); unloadFns = [];
+  var page = document.getElementById("page");
+  page.innerHTML = '<div class="question-display rich-text"><div class="qt"></div></div>';
+  var qtext = page.querySelector(".qt");
+  qtext.innerHTML = "<p style='margin:0'>" + questionText + "</p>";
+  window.Qualtrics = { SurveyEngine: {
+    setEmbeddedData: function (k, v) { ED[k] = v; },
+    addOnReady: function (f) { setTimeout(f, 0); },
+    addOnUnload: function (f) { unloadFns.push(f); },
+    addOnload: function (fn) {
+      fn.call({
+        getQuestionContainer: function () { return page; },
+        getQuestionTextContainer: function () { return qtext; },
+        hideNextButton: function () {},
+        clickNextButton: next
+      });
+    }
+  } };
+  return fetch(file + "?t=" + Date.now()).then(function (r) {
+    if (!r.ok) { throw new Error("Could not load " + file); }
+    return r.text();
+  }).then(function (src) { new Function(pipe(src))(); });
+}
+function showCheck() {
+  unloadFns.forEach(function (f) { f(); }); unloadFns = [];
+  var page = document.getElementById("page");
+  var saved = {};
+  ["condition", "tip_choice", "tip_percent", "tip_amount", "custom_opened", "decision_ms"].forEach(function (k) { saved[k] = ED[k]; });
+  page.innerHTML = '<div class="question-display check"><p><b>*</b> ' + CHECK_QUESTION + "</p>" +
+    CHECK_CHOICES.map(function (c) { return '<label><input type="radio" name="mc"> ' + c + "</label>"; }).join("") +
+    '<button class="next" onclick="location.reload()">Start over</button>' +
+    "<p style='margin-top:28px;font-size:14px;color:#555'>Data the tip screen saved (these become columns in Qualtrics):</p><pre>" +
+    JSON.stringify(saved, null, 2) + "</pre></div>";
+  window.scrollTo(0, 0);
+}
+runPage("qualtrics/check-screen.js", ED.scenario, function () {
+  runPage("qualtrics/tip-screen.js", ED.reminder, showCheck).then(function () { window.scrollTo(0, 0); });
+}).catch(function (e) {
+  document.getElementById("page").innerHTML = "<p>" + e.message + ". Open this page from GitHub Pages (see README), not by double-clicking the file.</p>";
+});
+</script>
+</body>
+</html>
