@@ -44,7 +44,7 @@ scripts load them from there.
 2. **Edit on GitHub.** Open the file in `qualtrics/`, click the ✏️ pencil (*Edit this file*), make
    the change, then click **Commit changes…**. Write a short note like "Raise max custom tip to $30".
 3. **Check it.** Open the preview link, pick each condition (C1–C4), and click through. Changes show
-   up about a minute after you commit. Then add a line to `CHANGELOG.md`.
+   up a few minutes after you commit (refresh the page). Then add a line to `CHANGELOG.md`.
 4. **Put it in Qualtrics.** Open the file on GitHub → click the **Copy raw file** button (two
    overlapping squares). In Qualtrics: click the question → **JavaScript** (left panel) → select
    everything in the box → paste → **Save**. `check-screen.js` goes in **Q1**, `tip-screen.js` in **Q2**.
