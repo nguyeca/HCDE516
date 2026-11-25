@@ -108,6 +108,23 @@ function showCheck() {
     JSON.stringify(saved, null, 2) + "</pre></div>";
   window.scrollTo(0, 0);
 }
+// Warn if the SHARED BLOCK in the two scripts has drifted apart.
+function sharedBlock(src) {
+  var m = src.match(/SHARED BLOCK: START[\s\S]*SHARED BLOCK: END/);
+  return m ? m[0] : null;
+}
+Promise.all(["qualtrics/check-screen.js", "qualtrics/tip-screen.js"].map(function (f) {
+  return fetch(f + "?t=" + Date.now()).then(function (r) { return r.text(); });
+})).then(function (srcs) {
+  var a = sharedBlock(srcs[0]), b = sharedBlock(srcs[1]);
+  if (a && a === b) { return; }
+  var warn = document.createElement("p");
+  warn.style.cssText = "background:#FDECEA;color:#8A1C12;padding:10px 14px;border-radius:8px;font:14px/1.4 sans-serif;margin:8px 0";
+  warn.textContent = "Heads up: the SHARED BLOCK in check-screen.js and tip-screen.js no longer matches. " +
+    "Copy your change into the other file so both pages stay the same.";
+  document.body.insertBefore(warn, document.body.firstChild);
+}).catch(function () {});
+
 runPage("qualtrics/check-screen.js", ED.scenario, function () {
   runPage("qualtrics/tip-screen.js", ED.reminder, showCheck).then(function () { window.scrollTo(0, 0); });
 }).catch(function (e) {

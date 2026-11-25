@@ -3,6 +3,7 @@
 Newest first. One line per change: date, who, what.
 
 ## V2 photo version
+- 2026-11-25 · Katie (with Claude) · Code cleanup, no change to what participants see or the data saved (checked screen-by-screen in all 4 conditions on desktop, tablet and phone). Shared settings/layout block identical in both files; one `CONDITIONS` table; subtotal added up from `ITEMS`; one function per screen; preview page warns if the shared blocks differ. Fix: page 3 no longer re-widens if the window is resized.
 - 2026-11-24 · Katie (with Claude) · Moved code to GitHub; added preview page and docs.
 - 2026-11-23 · Katie (with Claude) · Page text now comes from Survey flow (`scenario`, `reminder`); added manipulation check (Q3).
 - 2026-11-23 · Katie (with Claude) · Side-by-side desktop layout (1100px+), smaller UW logo, condition-matched scene photos.

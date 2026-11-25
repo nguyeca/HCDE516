@@ -23,45 +23,69 @@
    tip_amount     tip in dollars, e.g. 5.65
    custom_opened  1 if they ever opened the custom keypad, else 0
    decision_ms    milliseconds from screen appearing to final choice
+
+   HOW THIS FILE IS ORGANIZED
+   1. Shared block: settings (restaurant, menu, tax, photos, conditions),
+      styles and page layout. Identical in check-screen.js; change both.
+   2. Tip settings: presets, button labels, max custom tip.
+   3. Saving the data.
+   4. The screens, in order: tip -> (custom keypad) -> tap to pay -> approved.
    ===================================================================== */
 
 Qualtrics.SurveyEngine.addOnload(function () {
   var q = this;
-  // ---------- Scene photo (same layout in every condition; only the photo changes) ----------
+
+  /* ===================== SHARED BLOCK: START =====================
+     This block is IDENTICAL in check-screen.js and tip-screen.js.
+     If you change anything between START and END, paste the same
+     change into the other file. The preview page warns you if the two
+     copies stop matching. (Each file is pasted into its own Qualtrics
+     question, so they can't load a shared file.)
+     ================================================================ */
+
+  // ---------- Study settings (same in every condition) ----------
+  var MERCHANT = "Corner Kitchen";  // name at the top of the tablet
+  var MERCHANT_TAGLINE = "";        // optional small line under the name; "" = none
+  var ITEMS = [                     // [name, price]; subtotal is added up from these ($22.60)
+    ["Roasted turkey sandwich + side salad", 16.75],
+    ["Iced latte", 5.85]
+  ];
+  var TAX_RATE = 10.55;             // percent; Seattle combined sales tax, Q4 2026
+
+  // Scene photos from the Qualtrics Graphics Library (one per service type).
   var SCENES = {
     counter: "https://uwashington.qualtrics.com/ControlPanel/Graphic.php?IM=IM_chCQClsbTgyeNfU",
     sitdown: "https://uwashington.qualtrics.com/ControlPanel/Graphic.php?IM=IM_6qB3StlKbskQQhv"
   };
-  var svc = "${e://Field/service}";
-  if (svc !== "counter" && svc !== "sitdown") {
-    var cnd = "${e://Field/condition}";
-    svc = (cnd === "C1" || cnd === "C2") ? "counter" : "sitdown";   // preview fallback
-  }
 
-  // ---------- Settings ----------
-  var TEST_CONDITION = "C4";        // used only if "condition" is empty
-  // Check (Seattle lunch). Must match the order on page 1 (check-screen.js).
-  var SUBTOTAL = 22.60;             // Roasted turkey sandwich + side salad $16.75 + Iced latte $5.85
-  var TAX_RATE = 10.55;             // Seattle combined sales tax, Q4 2026
-  var TAX = Math.round(SUBTOTAL * TAX_RATE) / 100;   // $2.38
-  var CHECK_TOTAL = Math.round((SUBTOTAL + TAX) * 100) / 100;  // $24.98
-  // Suggested tips are calculated on the pre-tax subtotal (Square-style).
-  var MAX_CUSTOM = 25.00;           // highest custom tip allowed
-  var DEFAULTS = {
-    low:  [10, 15, 20],             // C1 (counter) and C3 (sit-down)
-    high: [20, 25, 30]              // C2 (counter) and C4 (sit-down)
+  // The 2 x 2 design. To add or change a condition, edit this table only.
+  //   service: which scene photo / setting   tips: which preset list in tip-screen.js
+  var CONDITIONS = {
+    C1: { service: "counter", tips: "low" },
+    C2: { service: "counter", tips: "high" },
+    C3: { service: "sitdown", tips: "low" },
+    C4: { service: "sitdown", tips: "high" }
   };
-  var LABELS = { custom: "Custom", none: "No tip", heading: "Add a tip?" };
-  var MERCHANT = "Corner Kitchen";  // shown at the top; same in every condition
+  var TEST_CONDITION = "C4";        // used only when "condition" is empty (e.g., Qualtrics preview)
+  var WIDE_MIN = 1100;              // px; side-by-side desktop layout from here up (also in the CSS below)
 
-  // ---------- Condition ----------
+  // ---------- Which condition is this person in? ----------
+  // Qualtrics fills in the two piped fields below with this person's embedded data before the script runs.
   var condition = "${e://Field/condition}";
-  if (!/^C[1-4]$/.test(condition)) { condition = TEST_CONDITION; }
-  var level = (condition === "C1" || condition === "C3") ? "low" : "high";
-  var presets = DEFAULTS[level];
+  if (!CONDITIONS.hasOwnProperty(condition)) { condition = TEST_CONDITION; }
+  var service = "${e://Field/service}";
+  if (!SCENES.hasOwnProperty(service)) { service = CONDITIONS[condition].service; }
 
-  // ---------- Styles (Figma tokens: Tip UI collection) ----------
-  var css = [
+  // ---------- Money ----------
+  function money(n) { return "$" + n.toFixed(2); }
+  function round2(n) { return Math.round(n * 100) / 100; }
+  var SUBTOTAL = round2(ITEMS.reduce(function (sum, item) { return sum + item[1]; }, 0));  // $22.60
+  var TAX = Math.round(SUBTOTAL * TAX_RATE) / 100;                                         // $2.38
+  var CHECK_TOTAL = round2(SUBTOTAL + TAX);                                                // $24.98
+
+  // ---------- Styles (colors are the Figma "Tip UI" variables) ----------
+  var BASE_CSS = [
+    // Tablet frame + Figma color tokens
     ".tp{--blue:#3E3EF4;--blue-pressed:#2A2AC4;--blue-subtle:#ECECFE;--text:#1A1A1A;--muted:#6B6B70;--key:#F4F4F5;",
     "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;",
     "width:100%;max-width:720px;margin:16px 0 0;background:#18181B;padding:14px;border-radius:28px;box-sizing:border-box;",
@@ -69,6 +93,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
     ".tp *{box-sizing:border-box}",
     ".tp-screen{background:#fff;color:var(--text);border-radius:14px;padding:40px 32px 28px;text-align:center}",
     ".tp h2{font-size:32px;font-weight:400;margin:0 0 24px;letter-spacing:-.01em;color:var(--text);line-height:1.2}",
+    // Buttons
     ".tp-presets{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}",
     ".tp-btn{appearance:none;-webkit-appearance:none;border:0;border-radius:2px;cursor:pointer;font:inherit;width:100%;margin:0;box-shadow:none;text-transform:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}",
     ".tp-preset{background:var(--blue);color:#fff;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px}",
@@ -82,14 +107,14 @@ Qualtrics.SurveyEngine.addOnload(function () {
     ".tp-lang{margin-top:32px;font-size:16px;display:inline-flex;align-items:center;gap:6px;color:var(--text)}",
     ".tp-lang svg{width:18px;height:18px;flex:none}",
     ".tp-lang svg *{fill:none !important;stroke:currentColor !important}",
+    // Merchant header
     ".tp-merchant{display:flex;flex-direction:column;align-items:center;gap:8px;margin:0 0 20px}",
     ".tp-logo{width:48px;height:48px;border-radius:50%;background:#1A1A1A;display:flex;align-items:center;justify-content:center}",
     ".tp-logo svg{width:28px;height:28px;display:block}",
     ".tp-logo svg *{fill:none !important;stroke:#fff !important}",
     ".tp-mname{font-size:16px;font-weight:600;color:var(--text);line-height:1.2}",
     ".tp-mtag{font-size:10px;font-weight:600;letter-spacing:.22em;color:#8A6F62;text-transform:uppercase;margin-top:-4px}",
-    ".tp-total{font-size:20px;font-weight:600;color:var(--text);margin:-16px 0 4px}",
-    ".tp-note{font-size:14px;color:var(--muted);margin:0 0 20px}",
+    // Pay / approved / receipt
     ".tp-done-icon{width:64px;height:64px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;margin:8px auto 16px}",
     ".tp-done-icon svg{width:32px;height:32px;display:block}",
     ".tp-done-icon svg *{fill:none !important;stroke:#fff !important}",
@@ -101,6 +126,8 @@ Qualtrics.SurveyEngine.addOnload(function () {
     ".tp-pay-icon *{fill:none !important;stroke:var(--blue) !important}",
     ".tp-pay-total{font-size:44px;font-weight:700;margin:4px 0 20px;color:var(--text)}",
     ".tp-sub{color:var(--muted);font-size:16px;margin:0 0 12px}",
+    ".tp h2.tp-tight{margin-bottom:4px}",
+    // Custom-tip keypad
     ".tp-custom h2{margin-bottom:8px}",
     ".tp-amount{font-size:48px;font-weight:700;margin:0 0 4px;color:var(--text)}",
     ".tp-err{color:#C0362C;font-size:14px;min-height:20px;margin:0 0 12px}",
@@ -110,6 +137,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
     ".tp-key.blank{visibility:hidden}",
     ".tp-actions{max-width:360px;margin:0 auto}",
     ".tp-row span:last-child{white-space:nowrap;padding-left:12px;flex:none}",
+    // Stop Qualtrics' theme from restyling our buttons
     ".tp .tp-btn:hover,.tp .tp-btn:focus{box-shadow:none !important;border:0 !important}",
     ".tp .tp-preset,.tp .tp-preset:hover,.tp .tp-preset:focus{background:var(--blue) !important;color:#fff !important}",
     ".tp .tp-preset:active,.tp .tp-preset.is-pressed{background:var(--blue-pressed) !important}",
@@ -118,6 +146,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
     ".tp .tp-key,.tp .tp-key:hover,.tp .tp-key:focus{background:var(--key) !important;color:var(--text) !important}",
     ".tp .tp-btn:hover{filter:brightness(.96)}",
     ".tp .tp-btn:focus-visible{outline:2px solid #1A1A1A !important;outline-offset:2px}",
+    // Scene photo with the tablet overlapping it (stacked layout)
     ".tp-stage{width:100%;max-width:720px;margin:16px 0 0}",
     ".tp-scene{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:16px;background:#ddd}",
     ".tp-scene.banner{aspect-ratio:12/5;object-position:50% 72%}",
@@ -125,223 +154,306 @@ Qualtrics.SurveyEngine.addOnload(function () {
     ".tp-stage.banner .tp{margin-top:-56px !important}",
     "#logo-container{padding-top:12px !important;padding-bottom:4px !important}#logo-container img{height:56px !important;width:auto !important}",
     ".tp-caption{display:none}",
+    // Desktop: text + photo on the left, tablet on the right (1100px = WIDE_MIN)
     "@media (min-width:1100px){.tp-stage.tp-wide{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(400px,1fr);gap:44px;align-items:center;max-width:none;margin-top:8px}.tp-wide .tp-left .tp-scene{aspect-ratio:16/9;border-radius:18px;box-shadow:0 12px 32px rgba(0,0,0,.18)}.tp-stage.tp-wide .tp{margin:0 !important;max-width:none;width:auto}.tp-wide .tp-caption{display:block;font-size:20px;line-height:1.5;color:#1f1f1f;margin:0 0 20px}.tp-orig-wide{display:none !important}html.tp-wide-page #survey-canvas{width:min(1320px,calc(100vw - 64px)) !important;max-width:none !important;flex:none !important}.tp-q-wide{max-width:none !important}}",
+    // Phones
     "@media (max-width:520px){.tp-stage .tp,.tp-stage.banner .tp{margin-top:-32px !important;width:94%}.tp-scene{border-radius:12px}}",
     "@media (max-width:520px){.tp{padding:8px;border-radius:20px}.tp-screen{padding:28px 12px 20px;border-radius:12px}",
     ".tp h2{font-size:26px;margin-bottom:18px}.tp-presets{gap:8px}.tp-preset{min-height:104px}",
     ".tp-preset .pct{font-size:28px}.tp-preset .amt{font-size:14px}.tp-secondary,.tp-primary{height:52px;margin-top:8px}",
     ".tp-key{height:54px}.tp-amount{font-size:40px}}"
   ].join("");
-  var old = document.getElementById("tp-style");
-  if (old) { old.parentNode.removeChild(old); }
-  {
+
+  // Puts the styles on the page (replacing the previous page's copy).
+  function installStyles(css) {
+    var old = document.getElementById("tp-style");
+    if (old) { old.parentNode.removeChild(old); }
     var style = document.createElement("style");
     style.id = "tp-style";
     style.textContent = css;
     document.head.appendChild(style);
   }
 
-  // ---------- Helpers ----------
-  function money(n) { return "$" + n.toFixed(2); }
-  function round2(n) { return Math.round(n * 100) / 100; }
-  var start = Date.now();
-  var customOpened = 0;
-  var done = false;
-
-  function save(choice, amount) {
-    if (done) { return; }
-    done = true;
-    var pct = round2(amount / SUBTOTAL * 100);  // % of pre-tax subtotal
-    var ed = Qualtrics.SurveyEngine;
-    ed.setEmbeddedData("condition", condition);
-    ed.setEmbeddedData("tip_choice", choice);
-    ed.setEmbeddedData("tip_percent", String(pct));
-    ed.setEmbeddedData("tip_amount", amount.toFixed(2));
-    ed.setEmbeddedData("custom_opened", String(customOpened));
-    ed.setEmbeddedData("decision_ms", String(Date.now() - start));
-    setTimeout(function () { showConfirm(choice, amount, pct); }, 250); // brief pressed state
+  // ---------- Small helpers ----------
+  // Runs fn when any element matching selector inside `container` is clicked.
+  function onClick(container, selector, fn) {
+    Array.prototype.forEach.call(container.querySelectorAll(selector), function (el) {
+      el.addEventListener("click", function () { fn(el); });
+    });
+  }
+  // One line of an order or receipt: label on the left, amount on the right.
+  function row(label, value, className) {
+    return '<div class="tp-row' + (className ? " " + className : "") + '"><span>' + label + '</span><span>' + value + '</span></div>';
+  }
+  function el(tag, className) {
+    var node = document.createElement(tag);
+    if (className) { node.className = className; }
+    return node;
   }
 
-  // ---------- Build ----------
-  var root = q.getQuestionContainer().querySelector("#tip-root");
-  if (!root) {
-    root = document.createElement("div");
-    q.getQuestionTextContainer().appendChild(root);
-  }
-  root.innerHTML = "";
-  var stage = document.createElement("div"); stage.className = "tp-stage banner"; root.appendChild(stage);
-  var scene = document.createElement("img"); scene.className = "tp-scene banner"; scene.alt = ""; scene.src = SCENES[svc]; stage.appendChild(scene);
-  scene.addEventListener("load", function () { setTimeout(centerFrame, 0); });
-  var frame = document.createElement("div");
-  frame.className = "tp";
-  stage.appendChild(frame);
+  var BOWL_ICON = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3.5 12.5h17a8.5 7 0 0 1-17 0z"/><path d="M9 21h6"/>' +
+    '<path d="M8.5 3.5c-1 1 1 2 0 3.2"/><path d="M12 2.5c-1 1.1 1 2.2 0 3.6"/><path d="M15.5 3.5c-1 1 1 2 0 3.2"/></svg>';
+  var MERCHANT_HTML = '<div class="tp-merchant"><div class="tp-logo">' + BOWL_ICON + '</div>' +
+    '<div class="tp-mname">' + MERCHANT + '</div>' +
+    (MERCHANT_TAGLINE ? '<div class="tp-mtag">' + MERCHANT_TAGLINE + '</div>' : '') + '</div>';
 
-  // ---------- Desktop (1100px+): side-by-side; the script widens Qualtrics' page column ----------
-  // Left: scenario text + photo. Right: the tablet. Phones keep the stacked layout.
-  var qtext = q.getQuestionTextContainer();
-  var orig = document.createElement("div"); orig.className = "tp-orig";
-  Array.prototype.slice.call(qtext.childNodes).forEach(function (n) {
-    if (n !== root && !(n.contains && n.contains(root))) { orig.appendChild(n); }
-  });
-  qtext.insertBefore(orig, qtext.firstChild);
-  var left = document.createElement("div"); left.className = "tp-left";
-  // Page 2 text: comes from the Q2 question text (Survey Flow field "reminder").
-  // These built-in lines are only a backup if the question text is ever left empty.
+  // ---------- Page layout: scene photo + tablet ----------
+  // Builds the layout inside the question and returns the pieces each page fills in:
+  //   frame = the dark tablet bezel, screen = the white screen inside it.
+  // Phones/tablets: photo on top, tablet overlapping it.
+  // Desktop (WIDE_MIN and up): question text + photo on the left, tablet on the right;
+  //   Qualtrics' page column is widened while this page is showing.
+  // options.banner:       use the shorter, wide photo crop
+  // options.fallbackText: shown if the Qualtrics question text is empty
+  function buildLayout(q, options) {
+    var qtext = q.getQuestionTextContainer();
+    var root = q.getQuestionContainer().querySelector("#tip-root");
+    if (!root) { root = el("div"); qtext.appendChild(root); }
+    root.innerHTML = "";
+
+    var stage = el("div", "tp-stage" + (options.banner ? " banner" : ""));
+    var left = el("div", "tp-left");
+    var caption = el("div", "tp-caption");
+    var scene = el("img", "tp-scene" + (options.banner ? " banner" : ""));
+    var frame = el("div", "tp");
+    var screen = el("div", "tp-screen");
+    scene.alt = "";
+    scene.src = SCENES[service];
+
+    // Move Qualtrics' question text into its own box so it can be hidden on desktop,
+    // where a copy (the caption) sits above the photo instead.
+    var orig = el("div", "tp-orig");
+    Array.prototype.slice.call(qtext.childNodes).forEach(function (n) {
+      if (n !== root && !(n.contains && n.contains(root))) { orig.appendChild(n); }
+    });
+    qtext.insertBefore(orig, qtext.firstChild);
+    if (options.fallbackText && !(orig.textContent || "").trim()) {
+      orig.innerHTML = '<p style="margin:0">' + options.fallbackText + '</p>';
+    }
+    caption.innerHTML = orig.innerHTML;
+
+    left.appendChild(caption);
+    left.appendChild(scene);
+    frame.appendChild(screen);
+    stage.appendChild(left);
+    stage.appendChild(frame);
+    root.appendChild(stage);
+
+    function applyWideLayout() {
+      var wide = window.innerWidth >= WIDE_MIN;
+      stage.classList.toggle("tp-wide", wide);
+      orig.classList.toggle("tp-orig-wide", wide);
+      document.documentElement.classList.toggle("tp-wide-page", wide);
+      var questionBox = root.closest ? root.closest(".question-display") : null;
+      if (questionBox) { questionBox.classList.toggle("tp-q-wide", wide); }
+    }
+
+    // Stacked layout only: center the photo + tablet on the whole question column
+    // (Qualtrics' question-text box can be narrower than the column and pinned left).
+    function centerStage() {
+      stage.style.transform = "";
+      if (stage.classList.contains("tp-wide")) { return; }   // wide layout fills the column already
+      var col = q.getQuestionContainer().getBoundingClientRect();
+      var box = stage.getBoundingClientRect();
+      if (window.innerWidth < 700 || col.width < box.width + 40) { return; }  // phones: leave as is
+      var shift = (col.left + col.width / 2) - (box.left + box.width / 2);
+      if (Math.abs(shift) > 1) { stage.style.transform = "translateX(" + Math.round(shift) + "px)"; }
+    }
+
+    function onResize() { applyWideLayout(); centerStage(); }
+    applyWideLayout();
+    window.addEventListener("resize", onResize);
+    scene.addEventListener("load", function () { setTimeout(centerStage, 0); });
+    if (Qualtrics.SurveyEngine.addOnReady) { Qualtrics.SurveyEngine.addOnReady(centerStage); }
+    setTimeout(centerStage, 0);
+    setTimeout(centerStage, 300);   // again after Qualtrics finishes its own layout
+
+    // Leaving the page: stop listening and give Qualtrics its normal page width back.
+    if (Qualtrics.SurveyEngine.addOnUnload) {
+      Qualtrics.SurveyEngine.addOnUnload(function () {
+        window.removeEventListener("resize", onResize);
+        document.documentElement.classList.remove("tp-wide-page");
+      });
+    }
+
+    return { frame: frame, screen: screen };
+  }
+
+  /* ====================== SHARED BLOCK: END ====================== */
+
+  // ======================== THIS PAGE: CHECKOUT ========================
+
+  // ---------- Tip settings ----------
+  // Suggested tips, as % of the pre-tax subtotal (Square-style).
+  // Which list a condition gets is set in CONDITIONS (shared block).
+  var DEFAULTS = {
+    low:  [10, 15, 20],             // C1 (counter) and C3 (sit-down)
+    high: [20, 25, 30]              // C2 (counter) and C4 (sit-down)
+  };
+  var LABELS = { custom: "Custom", none: "No tip", heading: "Add a tip?" };
+  var MAX_CUSTOM = 25.00;           // highest custom tip allowed, in dollars
+  var MAX_CUSTOM_DIGITS = 6;        // keypad stops accepting digits after $9,999.99
+  var PAY_DELAY_MS = 900;           // "Processing…" pause before "Approved"
+  var PRESS_DELAY_MS = 250;         // lets the pressed button color show before moving on
+
+  // Page 2 text comes from the Q2 question text (Survey Flow field "reminder").
+  // These lines are only a backup if the question text is ever left empty.
   var REMINDERS = {
     counter: "The cashier turns the tablet toward you so you can pay. Complete your payment as you normally would.",
     sitdown: "Your server hands you the tablet at your table so you can pay. Complete your payment as you normally would."
   };
-  if (!(orig.textContent || "").trim()) { orig.innerHTML = "<p style=\"margin:0\">" + REMINDERS[svc] + "</p>"; }
-  var cap = document.createElement("div"); cap.className = "tp-caption"; cap.innerHTML = orig.innerHTML;
-  left.appendChild(cap);
-  stage.insertBefore(left, scene); left.appendChild(scene);
-  function layoutWide() {
-    var wide = window.innerWidth >= 1100;
-    stage.classList.toggle("tp-wide", wide);
-    orig.classList.toggle("tp-orig-wide", wide);
-    document.documentElement.classList.toggle("tp-wide-page", wide);
-    var qd = root.closest ? root.closest(".question-display") : null;
-    if (qd) { qd.classList.toggle("tp-q-wide", wide); }
+
+  var presets = DEFAULTS[CONDITIONS[condition].tips];
+
+  var PAGE_CSS =
+    ".tp-total{font-size:20px;font-weight:600;color:var(--text);margin:-16px 0 4px}" +
+    ".tp-note{font-size:14px;color:var(--muted);margin:0 0 20px}";
+
+  var ICONS = {
+    globe: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>' +
+      '<path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" stroke="currentColor" stroke-width="1.6"/></svg>',
+    contactless: '<svg class="tp-pay-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke-width="1.6" stroke-linecap="round">' +
+      '<path d="M8.5 7.5a6.5 6.5 0 0 1 0 9"/><path d="M12 5a10 10 0 0 1 0 14"/><path d="M15.5 2.5a13.5 13.5 0 0 1 0 19"/><path d="M5 10a3 3 0 0 1 0 4"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+
+  // ---------- Saving the data ----------
+  var startTime = Date.now();
+  var customOpened = 0;
+  var saved = false;
+
+  function tipForPreset(percent) { return round2(SUBTOTAL * percent / 100); }
+
+  // Saves the person's choice once (later taps are ignored), then moves to "tap to pay".
+  function saveTip(choice, amount) {
+    if (saved) { return; }
+    saved = true;
+    var percent = round2(amount / SUBTOTAL * 100);
+    var data = {
+      condition: condition,
+      tip_choice: choice,
+      tip_percent: String(percent),
+      tip_amount: amount.toFixed(2),
+      custom_opened: String(customOpened),
+      decision_ms: String(Date.now() - startTime)
+    };
+    Object.keys(data).forEach(function (field) {
+      Qualtrics.SurveyEngine.setEmbeddedData(field, data[field]);
+    });
+    setTimeout(function () { showPayScreen(choice, amount, percent); }, PRESS_DELAY_MS);
   }
-  layoutWide();
-  window.addEventListener("resize", function () { layoutWide(); centerFrame(); });
-  var wrap = document.createElement("div");
-  wrap.className = "tp-screen";
-  frame.appendChild(wrap);
 
-  var globe = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-    '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>' +
-    '<path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" stroke="currentColor" stroke-width="1.6"/></svg>';
+  // ---------- Screens ----------
+  // Each screen redraws the inside of the tablet (`screen`).
+  var frame, screen;   // set at Start, below
 
-  var MERCHANT_TAGLINE = "";  // optional small line under the name; "" = none
-  var bowlIcon = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M3.5 12.5h17a8.5 7 0 0 1-17 0z"/><path d="M9 21h6"/>' +
-    '<path d="M8.5 3.5c-1 1 1 2 0 3.2"/><path d="M12 2.5c-1 1.1 1 2.2 0 3.6"/><path d="M15.5 3.5c-1 1 1 2 0 3.2"/></svg>';
-  var merchantHtml = '<div class="tp-merchant"><div class="tp-logo">' + bowlIcon +
-    '</div><div class="tp-mname">' + MERCHANT + '</div>' +
-    (MERCHANT_TAGLINE ? '<div class="tp-mtag">' + MERCHANT_TAGLINE + '</div>' : '') + '</div>';
-
+  // Screen 1: "Add a tip?" with the condition's three presets, Custom and No tip.
   function showTipScreen() {
-    var html = merchantHtml + '<h2>' + LABELS.heading + '</h2>' +
+    var presetButtons = presets.map(function (percent, i) {
+      return '<button type="button" class="tp-btn tp-preset" data-i="' + i + '">' +
+        '<span class="pct">' + percent + '%</span><span class="amt">' + money(tipForPreset(percent)) + '</span></button>';
+    }).join("");
+
+    frame.className = "tp";
+    screen.innerHTML = MERCHANT_HTML +
+      '<h2>' + LABELS.heading + '</h2>' +
       '<p class="tp-total">Total ' + money(CHECK_TOTAL) + '</p>' +
       '<p class="tp-note">Suggested tips are based on the ' + money(SUBTOTAL) + ' subtotal, excluding taxes.</p>' +
-      '<div class="tp-presets">';
-    presets.forEach(function (p, i) {
-      html += '<button type="button" class="tp-btn tp-preset" data-i="' + i + '">' +
-        '<span class="pct">' + p + '%</span><span class="amt">' + money(round2(SUBTOTAL * p / 100)) + '</span></button>';
-    });
-    html += '</div>' +
+      '<div class="tp-presets">' + presetButtons + '</div>' +
       '<button type="button" class="tp-btn tp-secondary" data-act="custom">' + LABELS.custom + '</button>' +
       '<button type="button" class="tp-btn tp-secondary" data-act="none">' + LABELS.none + '</button>' +
-      '<div class="tp-lang">' + globe + 'English</div>';
-    frame.className = "tp";
-    wrap.innerHTML = html;
+      '<div class="tp-lang">' + ICONS.globe + 'English</div>';
 
-    Array.prototype.forEach.call(wrap.querySelectorAll(".tp-preset"), function (b) {
-      b.addEventListener("click", function () {
-        var i = Number(b.getAttribute("data-i"));
-        b.classList.add("is-pressed");
-        save("preset_" + (i + 1), round2(SUBTOTAL * presets[i] / 100));
-      });
+    onClick(screen, ".tp-preset", function (button) {
+      var i = Number(button.getAttribute("data-i"));
+      button.classList.add("is-pressed");
+      saveTip("preset_" + (i + 1), tipForPreset(presets[i]));
     });
-    wrap.querySelector('[data-act="custom"]').addEventListener("click", showCustomScreen);
-    wrap.querySelector('[data-act="none"]').addEventListener("click", function () { save("none", 0); });
+    onClick(screen, '[data-act="custom"]', showCustomScreen);
+    onClick(screen, '[data-act="none"]', function () { saveTip("none", 0); });
   }
 
-  // After the tip (data already saved): Square-style "tap to pay", then "Approved".
-  var contactless = '<svg class="tp-pay-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke-width="1.6" stroke-linecap="round">' +
-    '<path d="M8.5 7.5a6.5 6.5 0 0 1 0 9"/><path d="M12 5a10 10 0 0 1 0 14"/><path d="M15.5 2.5a13.5 13.5 0 0 1 0 19"/><path d="M5 10a3 3 0 0 1 0 4"/></svg>';
-
-  function showConfirm(choice, amount, pct) {
-    frame.className = "tp";
-    wrap.innerHTML = merchantHtml +
-      '<h2 style="margin-bottom:4px">Tap, insert, or swipe</h2>' +
-      '<p class="tp-sub">Total with tip</p>' +
-      '<p class="tp-pay-total">' + money(round2(CHECK_TOTAL + amount)) + '</p>' + contactless +
-      '<div class="tp-actions"><button type="button" class="tp-btn tp-primary" data-act="pay">Tap card to pay</button></div>';
-    wrap.querySelector('[data-act="pay"]').addEventListener("click", function () {
-      this.disabled = true; this.textContent = "Processing…";
-      setTimeout(function () { showApproved(choice, amount, pct); }, 900);
-    });
-  }
-
-  function showApproved(choice, amount, pct) {
-    var tipLabel = choice === "none" ? "No tip" : money(amount) + ' <span class="muted">(' + pct + '%)</span>';
-    var check = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    wrap.innerHTML = merchantHtml +
-      '<div class="tp-done-icon">' + check + '</div>' +
-      '<h2 style="margin-bottom:4px">Approved</h2><p class="tp-sub">Thank you!</p>' +
-      '<div class="tp-receipt">' +
-        '<div class="tp-row"><span>Subtotal</span><span>' + money(SUBTOTAL) + '</span></div>' +
-        '<div class="tp-row"><span>Tax</span><span>' + money(TAX) + '</span></div>' +
-        '<div class="tp-row"><span>Tip</span><span>' + tipLabel + '</span></div>' +
-        '<div class="tp-row total"><span>Total</span><span>' + money(round2(CHECK_TOTAL + amount)) + '</span></div>' +
-      '</div>' +
-      '<div class="tp-actions"><button type="button" class="tp-btn tp-primary" data-act="done">Done</button></div>';
-    wrap.querySelector('[data-act="done"]').addEventListener("click", function () { q.clickNextButton(); });
-  }
-
+  // Screen 1b: dollar keypad. Digits fill in from the cents, like Square ("1","2","3" = $1.23).
   function showCustomScreen() {
     customOpened = 1;
     var cents = 0;
+    var KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "back"];
+    var keyButtons = KEYS.map(function (k) {
+      if (k === "") { return '<span class="tp-btn tp-key blank"></span>'; }
+      if (k === "back") { return '<button type="button" class="tp-btn tp-key" data-k="back" aria-label="Delete">⌫</button>'; }
+      return '<button type="button" class="tp-btn tp-key" data-k="' + k + '">' + k + '</button>';
+    }).join("");
+
     frame.className = "tp tp-custom";
-    var keys = ["1","2","3","4","5","6","7","8","9","","0","back"];
-    var html = merchantHtml + '<h2>Custom tip</h2><p class="tp-sub">Enter a tip amount</p>' +
-      '<p class="tp-amount" aria-live="polite">$0.00</p><p class="tp-err"></p><div class="tp-keys">';
-    keys.forEach(function (k) {
-      if (k === "") { html += '<span class="tp-btn tp-key blank"></span>'; return; }
-      html += '<button type="button" class="tp-btn tp-key" data-k="' + k + '"' +
-        (k === "back" ? ' aria-label="Delete">⌫' : '>' + k) + '</button>';
-    });
-    html += '</div><div class="tp-actions">' +
-      '<button type="button" class="tp-btn tp-primary" data-act="add" disabled>Add tip</button>' +
-      '<button type="button" class="tp-btn tp-secondary" data-act="cancel">Cancel</button></div>';
-    wrap.innerHTML = html;
+    screen.innerHTML = MERCHANT_HTML +
+      '<h2>Custom tip</h2><p class="tp-sub">Enter a tip amount</p>' +
+      '<p class="tp-amount" aria-live="polite">$0.00</p><p class="tp-err"></p>' +
+      '<div class="tp-keys">' + keyButtons + '</div>' +
+      '<div class="tp-actions">' +
+        '<button type="button" class="tp-btn tp-primary" data-act="add" disabled>Add tip</button>' +
+        '<button type="button" class="tp-btn tp-secondary" data-act="cancel">Cancel</button>' +
+      '</div>';
 
-    var amountEl = wrap.querySelector(".tp-amount");
-    var errEl = wrap.querySelector(".tp-err");
-    var addBtn = wrap.querySelector('[data-act="add"]');
+    var amountText = screen.querySelector(".tp-amount");
+    var errorText = screen.querySelector(".tp-err");
+    var addButton = screen.querySelector('[data-act="add"]');
 
-    function render() {
+    function update() {
       var dollars = cents / 100;
-      amountEl.textContent = money(dollars);
       var tooHigh = dollars > MAX_CUSTOM;
-      errEl.textContent = tooHigh ? "Tip can't be more than " + money(MAX_CUSTOM) + "." : "";
-      addBtn.disabled = cents === 0 || tooHigh;
+      amountText.textContent = money(dollars);
+      errorText.textContent = tooHigh ? "Tip can't be more than " + money(MAX_CUSTOM) + "." : "";
+      addButton.disabled = cents === 0 || tooHigh;
     }
 
-    Array.prototype.forEach.call(wrap.querySelectorAll(".tp-key[data-k]"), function (b) {
-      b.addEventListener("click", function () {
-        var k = b.getAttribute("data-k");
-        if (k === "back") { cents = Math.floor(cents / 10); }
-        else if (cents < 100000) { cents = cents * 10 + Number(k); } // stops runaway typing
-        render();
-      });
+    onClick(screen, ".tp-key[data-k]", function (key) {
+      var k = key.getAttribute("data-k");
+      if (k === "back") { cents = Math.floor(cents / 10); }
+      else if (String(cents).length < MAX_CUSTOM_DIGITS) { cents = cents * 10 + Number(k); }
+      update();
     });
-    addBtn.addEventListener("click", function () { save("custom", cents / 100); });
-    wrap.querySelector('[data-act="cancel"]').addEventListener("click", showTipScreen);
+    onClick(screen, '[data-act="add"]', function () { saveTip("custom", cents / 100); });
+    onClick(screen, '[data-act="cancel"]', showTipScreen);
   }
 
-  // Center the device on the whole question column (Qualtrics' question-text
-  // box can be narrower than the column and pinned to the left).
-  function centerFrame() {
-    stage.style.transform = "";
-    var col = q.getQuestionContainer().getBoundingClientRect();
-    var f = stage.getBoundingClientRect();
-    if (window.innerWidth < 700 || (!stage.classList.contains("tp-wide") && col.width < f.width + 40)) { return; } // phones: leave as is
-    if (stage.classList.contains("tp-wide")) { return; } // wide layout fills the (widened) page column
-    var shift = (col.left + col.width / 2) - (f.left + f.width / 2);
-    if (Math.abs(shift) > 1) { stage.style.transform = "translateX(" + Math.round(shift) + "px)"; }
+  // Screen 2: "Tap, insert, or swipe" (the tip is already saved).
+  function showPayScreen(choice, amount, percent) {
+    frame.className = "tp";
+    screen.innerHTML = MERCHANT_HTML +
+      '<h2 class="tp-tight">Tap, insert, or swipe</h2>' +
+      '<p class="tp-sub">Total with tip</p>' +
+      '<p class="tp-pay-total">' + money(round2(CHECK_TOTAL + amount)) + '</p>' + ICONS.contactless +
+      '<div class="tp-actions"><button type="button" class="tp-btn tp-primary" data-act="pay">Tap card to pay</button></div>';
+    onClick(screen, '[data-act="pay"]', function (button) {
+      button.disabled = true;
+      button.textContent = "Processing…";
+      setTimeout(function () { showApprovedScreen(choice, amount, percent); }, PAY_DELAY_MS);
+    });
   }
-  window.addEventListener("resize", centerFrame);
-  if (Qualtrics.SurveyEngine.addOnReady) { Qualtrics.SurveyEngine.addOnReady(centerFrame); }
-  setTimeout(centerFrame, 0);
-  setTimeout(centerFrame, 300);
 
-  // Leaving checkout: put Qualtrics' normal page width back for later questions
-  if (Qualtrics.SurveyEngine.addOnUnload) {
-    Qualtrics.SurveyEngine.addOnUnload(function () { document.documentElement.classList.remove("tp-wide-page"); });
+  // Screen 3: "Approved" + receipt. Done moves to the next survey page.
+  function showApprovedScreen(choice, amount, percent) {
+    var tipLabel = choice === "none" ? "No tip" : money(amount) + ' <span class="muted">(' + percent + '%)</span>';
+    screen.innerHTML = MERCHANT_HTML +
+      '<div class="tp-done-icon">' + ICONS.check + '</div>' +
+      '<h2 class="tp-tight">Approved</h2><p class="tp-sub">Thank you!</p>' +
+      '<div class="tp-receipt">' +
+        row("Subtotal", money(SUBTOTAL)) +
+        row("Tax", money(TAX)) +
+        row("Tip", tipLabel) +
+        row("Total", money(round2(CHECK_TOTAL + amount)), "total") +
+      '</div>' +
+      '<div class="tp-actions"><button type="button" class="tp-btn tp-primary" data-act="done">Done</button></div>';
+    onClick(screen, '[data-act="done"]', function () { q.clickNextButton(); });
   }
+
+  // ---------- Start ----------
+  installStyles(BASE_CSS + PAGE_CSS);
+  var layout = buildLayout(q, { banner: true, fallbackText: REMINDERS[service] });
+  frame = layout.frame;
+  screen = layout.screen;
   q.hideNextButton();
   showTipScreen();
 });

@@ -33,10 +33,21 @@ scripts load them from there.
 |---|---|---|
 | Scenario wording (page 1) or reminder line (page 2) | Qualtrics → Survey flow → the `scenario` / `reminder` fields in each condition | No |
 | Manipulation-check question (page 3) | Qualtrics → Builder → Q3 | No |
-| Restaurant name, menu items, prices, tax | Settings near the top of **both** JS files (`MERCHANT`, `ITEMS`/`SUBTOTAL`, `TAX_RATE`; keep them matching) | Yes, small |
-| Tip percentages, button labels, max custom tip | Settings block in `tip-screen.js` | Yes, small |
-| Colors, sizes, layout | Figma first, then the CSS list in the JS files | Yes |
+| Restaurant name, menu items, prices, tax, scene photos, which condition gets which setting/tips | The **SHARED BLOCK** at the top of both JS files (`MERCHANT`, `ITEMS`, `TAX_RATE`, `SCENES`, `CONDITIONS`). The subtotal and total are added up for you. Make the same edit in **both** files; the preview page shows a red warning if they don't match | Yes, small |
+| Tip percentages, button labels, max custom tip | **Tip settings** in `tip-screen.js` (`DEFAULTS`, `LABELS`, `MAX_CUSTOM`) | Yes, small |
+| Colors, sizes, layout | Figma first, then `BASE_CSS` in the shared block (both files) | Yes |
 | New screen / new button / different flow | Figma first, then ask whoever codes (or Claude) | Yes, bigger |
+
+## How the code is organized
+
+Both scripts have the same two parts:
+
+1. **SHARED BLOCK** (between the `SHARED BLOCK: START` and `END` lines): study settings, colors and
+   page layout. It is identical in both files because each file is pasted into its own Qualtrics
+   question and can't load the other. Change one, change both.
+2. **This page:** `check-screen.js` draws the order summary; `tip-screen.js` has the tip settings,
+   the data saving (`saveTip`), and one function per screen, in order: `showTipScreen` →
+   `showCustomScreen` → `showPayScreen` → `showApprovedScreen`.
 
 ## How to make a code change (no software to install)
 
