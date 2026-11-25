@@ -19,6 +19,8 @@ Survey: **HCDE 516 - Tipping Point - V2 photo version** (UW Qualtrics).
 
    Each also sets `scenario` (page 1 text) and `reminder` (page 2 text). Counter conditions share
    one wording, sit-down conditions share the other.
+   `defaults` is saved for analysis only: the scripts decide low/high tips from `condition`
+   (C1/C3 = low, C2/C4 = high), so editing `defaults` does not change the buttons.
 3. **Default Question Block**: Q1, page break, Q2
 4. **Block 1**: Q3 (manipulation check)
 
@@ -60,4 +62,4 @@ before collecting data, what to do with people who miss it.
 
 - 1100px+ wide: side-by-side (text + photo left, tablet right); the scripts widen Qualtrics' page.
 - Narrower: stacked, photo on top with the tablet overlapping it.
-- The UW logo is shrunk by the scripts on these pages.
+- The UW logo is shrunk by the scripts; it stays small for the rest of the survey (Q3 and the end page).
