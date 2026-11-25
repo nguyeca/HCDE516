@@ -1,12 +1,13 @@
 /* =====================================================================
    Tipping Point — Square-style CHECKOUT (page 2 of 2) for Qualtrics
    ---------------------------------------------------------------------
-   WHERE THIS GOES: In the tip question, click the gear (Question
-   behavior) > JavaScript, delete everything in the box, and paste
-   this whole file.
+   WHERE THIS GOES: Q2 (page 2). Click the question > JavaScript (left
+   panel) > replace everything with this file > Save.
+   Question text: the piped field "reminder" from Survey flow.
 
    WHAT IT DOES
-   - Builds the tip screen inside the question (no images or outside fonts)
+   - Builds the tablet inside the question, plus the scene photo for the
+     condition's setting (photos load from the Qualtrics Graphics Library)
    - Reads the condition from the embedded data field "condition"
      (C1–C4). If it's empty (e.g., during a preview), it uses TEST_CONDITION.
    - Shows the check total ($24.98) under "Add a tip?" + subtotal note.
@@ -175,7 +176,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
   frame.className = "tp";
   stage.appendChild(frame);
 
-  // ---------- Desktop (1000px+): side-by-side, wider than Qualtrics' text column ----------
+  // ---------- Desktop (1100px+): side-by-side; the script widens Qualtrics' page column ----------
   // Left: scenario text + photo. Right: the tablet. Phones keep the stacked layout.
   var qtext = q.getQuestionTextContainer();
   var orig = document.createElement("div"); orig.className = "tp-orig";
