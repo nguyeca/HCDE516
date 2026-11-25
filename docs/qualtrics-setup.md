@@ -21,8 +21,8 @@ Survey: **HCDE 516 - Tipping Point - V2 photo version** (UW Qualtrics).
    one wording, sit-down conditions share the other.
    `defaults` is saved for analysis only: the scripts decide low/high tips from `condition`
    (C1/C3 = low, C2/C4 = high), so editing `defaults` does not change the buttons.
-3. **Default Question Block**: Q1, page break, Q2
-4. **Block 1**: Q3 (manipulation check)
+3. **Scenario + checkout (Q1–Q2)** block: Q1, page break, Q2
+4. **Manipulation check (Q3)** block: Q3
 
 ## Questions
 
