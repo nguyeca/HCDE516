@@ -1,10 +1,10 @@
 /* =====================================================================
    Tipping Point — Square-style ORDER SUMMARY (page 1 of 2) for Qualtrics
    ---------------------------------------------------------------------
-   WHERE THIS GOES: the scenario question (page 1). Gear > Question
-   behavior > JavaScript: delete everything, paste this file.
-   Question text: the scenario wording, then <div id="tip-root"></div>
-   in HTML view (same one line as the tip question).
+   WHERE THIS GOES: Q1 (page 1). Click the question > JavaScript (left
+   panel) > replace everything with this file > Save.
+   Question text: the piped field "scenario" from Survey flow. The script
+   adds the scene photo + tablet below it (no extra HTML needed).
 
    Shows the order on the same tablet design (subtotal $22.60, tax, Total $24.98) and a
    "Continue" button that moves to the checkout page. Saves no data.
@@ -127,7 +127,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
   scene.addEventListener("load", function () { setTimeout(centerFrame, 0); });
   var frame = document.createElement("div"); frame.className = "tp"; stage.appendChild(frame);
 
-  // ---------- Desktop (1000px+): side-by-side, wider than Qualtrics' text column ----------
+  // ---------- Desktop (1100px+): side-by-side; the script widens Qualtrics' page column ----------
   // Left: scenario text + photo. Right: the tablet. Phones keep the stacked layout.
   var qtext = q.getQuestionTextContainer();
   var orig = document.createElement("div"); orig.className = "tp-orig";
